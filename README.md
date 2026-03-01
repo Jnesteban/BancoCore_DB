@@ -195,7 +195,11 @@ ON c.id_persona = cb.id_persona;
 ```
 
 
+## Script de Base de Datos
 
+El archivo completo de creación de la base de datos se encuentra en:
+
+📂 gestion_banco.sql
 
 ### Autor: Juan Esteban Correa Cano . Base De Datos II
 
