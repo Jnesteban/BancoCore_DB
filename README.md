@@ -1,6 +1,6 @@
 # BancoCore_DB
 
-### Autor: Juan Esteban Correa Cano . Base De Datos II
+### Autor: Juan Esteban Correa Cano . Base De Datos II 2026-1
 
 # Sistema de Gestión de Información Bancaria (PostgreSQL)
 
