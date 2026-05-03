@@ -740,10 +740,10 @@ GRANT SELECT ON bitacora_operacion TO app_banco;
 
 ## Ejemplos de Uso
 
-### Ejemplo 1: Crear Cliente Persona Natural
-
+### Ejemplo 1: Flujo de Registro y Apertura
+Crea un cliente desde cero y le asigna su primera cuenta bancaria.
 ```sql
--- Ejecutar servicio de dominio
+-- 1. Crear Cliente Persona Natural (Firma completa obligatoria)
 SELECT * FROM sd_registrar_cliente_persona(
     p_numero_id := '12345678',
     p_nombre_completo := 'Juan Pérez González',
@@ -753,100 +753,97 @@ SELECT * FROM sd_registrar_cliente_persona(
     p_direccion := 'Calle 10 #20-30',
     p_ciudad := 'Bogotá',
     p_pais := 'Colombia',
-    p_id_usuario_creador := 1
+    p_id_usuario_creador := 1 -- Administrador
 );
 
--- Resultado
-id_cliente  | mensaje
-1           | Cliente persona natural registrado exitosamente. ID: 1
-```
-
-### Ejemplo 2: Abrir Cuenta Bancaria
-
-```sql
--- Ejecutar servicio de dominio
+-- 2. Abrir Cuenta Bancaria
 SELECT * FROM sd_abrir_cuenta_bancaria(
     p_id_cliente := 1,
     p_tipo_cliente := 'PERSONA',
-    p_id_tipo_cuenta := 1,              -- Ahorros
-    p_id_moneda := 2,                  -- COP
+    p_id_tipo_cuenta := 1,        -- Ahorros
+    p_id_moneda := 2,             -- COP
     p_saldo_inicial := 500000,
     p_id_usuario_creador := 1
 );
 
--- Resultado
-id_cuenta  | numero_cuenta       | mensaje
-1          | PERSONA-1-1-0001    | Cuenta bancaria abierta exitosamente
-```
 
-### Ejemplo 3: Crear Transferencia (Aprobación Requerida)
+
+### Ejemplo 2: Transferencia con Aprobación Requerida
+Simula una transacción que supera el umbral de seguridad y requiere intervención de un supervisor.
 
 ```sql
--- Empresa crea transferencia > umbral (requiere aprobación)
+-- 1. Crear cliente y cuenta de destino para la prueba
+SELECT * FROM sd_registrar_cliente_persona('99999999', 'María López', 'maria@email.com', '3000001', '1988-01-01', 'Av 1', 'Cali', 'Colombia', 1);
+SELECT * FROM sd_abrir_cuenta_bancaria(2, 'PERSONA', 1, 2, 0, 1); -- id_cuenta destino: 2
+
+-- 2. Solicitar transferencia que supera el umbral
 SELECT * FROM sd_crear_transferencia(
-    p_id_cuenta_origen := 5,            -- Cuenta empresa
-    p_id_cuenta_destino := 3,           -- Cuenta tercero
-    p_monto := 15000000,                -- Supera umbral
-    p_concepto := 'Pago de nómina',
-    p_id_usuario_creador := 8,          -- Empleado empresa
-    p_umbral_aprobacion := 10000000     -- Umbral en COP
-);
+    p_id_cuenta_origen := 1,
+    p_id_cuenta_destino := 2,
+    p_monto := 200000,
+    p_concepto := 'Pago de servicios prepago',
+    p_id_usuario_creador := 8,      -- Operador de Empresa
+    p_umbral_aprobacion := 100000   -- Umbral inferior al monto
+); 
 
--- Resultado
-id_transferencia  | numero_transferencia  | estado                    | mensaje
-101               | TRF-20240503-000101   | EN_ESPERA_APROBACION      | Transferencia creada: TRF-20240503-000101
-
--- Supervisor empresa APRUEBA la transferencia
+-- 3. Aprobar transferencia (Ejecutado por un Supervisor)
 SELECT * FROM sd_aprobar_transferencia(
-    p_id_transferencia := 101,
-    p_id_usuario_aprobador := 7           -- Supervisor empresa
+    p_id_transferencia := 1,        -- Usar el ID retornado en el paso anterior
+    p_id_usuario_aprobador := 7     -- Supervisor General
 );
-
--- Resultado
-mensaje
-Transferencia aprobada y ejecutada exitosamente
 ```
 
-### Ejemplo 4: Solicitar Préstamo
+### Ejemplo 3: Ciclo de Vida de Préstamo
+Proceso completo desde la solicitud hasta el desembolso efectivo de los fondos.
 
 ```sql
--- Cliente solicita préstamo personal
+-- 1. Solicitar Préstamo Personal
 SELECT * FROM sd_solicitar_prestamo(
-    p_id_cliente := 2,                  -- Cliente persona
+    p_id_cliente := 1,
     p_tipo_cliente := 'PERSONA',
-    p_id_tipo_prestamo := 1,            -- Personal
-    p_monto_solicitado := 5000000,      -- $5M
-    p_plazo_meses := 24,                -- 2 años
-    p_id_usuario_creador := 2           -- Asesor comercial
-);
-
--- Resultado
-id_prestamo  | numero_prestamo       | mensaje
-50           | PRE-20240503-000050   | Solicitud de préstamo registrada: PRE-20240503-000050
-
--- Analista APRUEBA
-SELECT * FROM sd_aprobar_prestamo(
-    p_id_prestamo := 50,
-    p_monto_aprobado := 5000000,
-    p_tasa_interes := 10.5,
+    p_id_tipo_prestamo := 1,      -- Personal
+    p_monto_solicitado := 5000000,
     p_plazo_meses := 24,
-    p_id_usuario_aprobador := 10        -- Analista interno
+    p_id_usuario_creador := 2     -- Asesor de Ventas
 );
 
--- Resultado
-mensaje
-Préstamo aprobado exitosamente
+-- 2. Aprobar Préstamo (Ejecutado por Analista)
+SELECT * FROM sd_aprobar_prestamo(
+    p_id_prestamo := 1,
+    p_monto_aprobado := 5000000,
+    p_tasa_interes := 12.5,
+    p_plazo_meses := 24,
+    p_id_usuario_aprobador := 10  -- Analista de Riesgo
+);
 
--- Analista DESEMBOLSA
+-- 3. Desembolsar Préstamo a Cuenta del Cliente
 SELECT * FROM sd_desembolsar_prestamo(
-    p_id_prestamo := 50,
-    p_id_cuenta_destino := 2,           -- Cuenta donde enviar dinero
+    p_id_prestamo := 1,
+    p_id_cuenta_destino := 1,     -- Cuenta de ahorros del cliente
     p_id_usuario_desembolsor := 10
 );
+```
 
--- Resultado
-mensaje
-Préstamo desembolsado exitosamente. Saldo actualizado en cuenta destino
+### Ejemplo 4: Consultas de Auditoría y Control
+Verificación de movimientos en la bitácora y estados financieros del cliente
+
+```sql
+-- Ver historial de operaciones de un producto (ej. Préstamo ID 1)
+SELECT 
+    b.fecha_hora_operacion,
+    u.nombre_usuario,
+    b.tipo_operacion,
+    b.detalles_operacion
+FROM bitacora_operacion b
+JOIN usuario_sistema u ON b.id_usuario = u.id_usuario
+WHERE b.id_producto_afectado = 1 
+ORDER BY b.fecha_hora_operacion DESC;
+
+-- Consultar resumen consolidado del cliente
+SELECT * FROM sd_obtener_resumen_cliente(
+    p_id_cliente := 1,
+    p_tipo_cliente := 'PERSONA'
+);
 ```
 
 ### Ejemplo 5: Consultar Bitácora
@@ -885,10 +882,6 @@ SELECT * FROM sd_obtener_resumen_cliente(
     p_tipo_cliente := 'PERSONA'
 );
 
--- Resultado
-total_cuentas | saldo_total | cuentas_activas | total_prestamos | prestamos_desembolsados
-3             | 12500000    | 3               | 2               | 1
-```
 
 ---
 
